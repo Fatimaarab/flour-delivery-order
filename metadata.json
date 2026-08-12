@@ -1,0 +1,6 @@
+{
+  "name": "سامانه صدور حواله آرد",
+  "description": "سامانه مدیریت و چاپ برگه‌های حواله تحویل آرد با قالب RTL رسمی و قابلیت پرینت استاندارد",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

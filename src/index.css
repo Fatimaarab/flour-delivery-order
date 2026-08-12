@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Vazirmatn', Tahoma, 'B Nazanin', sans-serif;
+  }
+}
+
+/* Custom print media rules */
+@media print {
+  /* Hide non-printable elements */
+  .no-print,
+  nav,
+  header,
+  footer,
+  .print-hide {
+    display: none !important;
+  }
+
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 13pt !important;
+  }
+
+  /* Reset container widths for A4 / standard print */
+  .receipt-paper-box {
+    box-shadow: none !important;
+    border: 2px solid #000000 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 20mm 15mm !important;
+    background: #ffffff !important;
+    page-break-inside: avoid;
+  }
+
+  .print-area-only {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
+
+/* Underline decoration for variable placeholders in paper format */
+.variable-underline {
+  border-bottom: 1.5px dotted #1e293b;
+  display: inline-block;
+  padding: 0 8px;
+  font-weight: 700;
+  color: #0f172a;
+}
+

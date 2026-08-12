@@ -1,0 +1,40 @@
+import { FlourReceipt } from '../types';
+
+export const INITIAL_RECEIPTS: FlourReceipt[] = [
+  {
+    id: 1,
+    receipt_number: '1403-8821',
+    issue_date: '۱۴۰۳/۰۵/۱۰',
+    bag_count: 320,
+    driver_name: 'اصغر محمدی خباز',
+    truck_number: '۴۴ع۷۸۹-ایران۷۷',
+    driver_national_id: '۰۹۲۳۴۵۶۷۸۱',
+    destination: 'نانوایی سنگک مرکزی - نیشابور خیابان اصلی',
+    description: 'آرد خبازی نوع ۱ (درصد سبوس‌گیری ۱۵٪) - وزن باسکول ورودی ۳۲,۴۵۰ کیلوگرم، وزن خروجی ۱۶,۴۵۰ کیلوگرم (وزن خالص آرد: ۱۶,۰۰۰ کیلوگرم).',
+    created_at: '2026-07-31T08:00:00Z',
+  },
+  {
+    id: 2,
+    receipt_number: '1403-8822',
+    issue_date: '۱۴۰۳/۰۵/۱۱',
+    bag_count: 450,
+    driver_name: 'رضا کریمی زارعی',
+    truck_number: '۱۲ب۶۵۴-ایران۶۸',
+    driver_national_id: '۰۸۱۲۳۴۵۶۷۹',
+    destination: 'شرکت تعاونی نانوایان مشهد - فاز دو صنعتی',
+    description: 'آرد ستاره خبازی ۴۰ کیلویی - بارگیری شده از سیلو شماره ۲ انبار مرکزی. تاییدیه کنترل کیفیت استاندارد دارد.',
+    created_at: '2026-07-31T08:15:00Z',
+  },
+  {
+    id: 3,
+    receipt_number: '1403-8823',
+    issue_date: '۱۴۰۳/۰۵/۱۲',
+    bag_count: 200,
+    driver_name: 'محمدرضا سلطانی',
+    truck_number: '۵۵د۳۲۱-ایران۱۲',
+    driver_national_id: '۰۷۹۸۷۶۵۴۳۲',
+    destination: 'کارخانه شیرینی‌پزی طوس - میدان آزادی',
+    description: 'آرد نول صنعتی درجه یک مخصوص قنادی - کیسه‌های ۵۰ کیلویی بدون پارگی و رطوبت.',
+    created_at: '2026-07-31T08:20:00Z',
+  },
+];
