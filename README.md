@@ -165,5 +165,3 @@ npm test
 | [DEPLOY.md](DEPLOY.md) | نصب روی سرور کارخانه، بکاپ، بازیابی |
 | [USER-GUIDE.md](USER-GUIDE.md) | راهنمای پرسنل، به تفکیک نقش |
 | [UAT-CHECKLIST.md](UAT-CHECKLIST.md) | چک‌لیست تست پذیرش |
-| [AUDIT.md](AUDIT.md) | ممیزی فنی وضعیت اولیه پروژه |
-| [PLAN.md](PLAN.md) | نقشه راه و تصمیم‌های معماری |
