@@ -1,0 +1,24 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.log
+install-log.txt
+update-log.txt
+.DS_Store
+
+# دیتابیس لوکال
+*.db
+*.sqlite
+*.sqlite3
+prisma/*.db
+prisma/*.db-journal
+
+# فایل‌های شخصی کلاود کد
+.claude/
+AUDIT.md
+REVIEW.md
+PLAN.md
+HOW-TO-CONTINUE.md
+START-HERE.md

@@ -1,56 +1,251 @@
 @import "tailwindcss";
 
+/*
+ * فونت وزیرمتن، محلی.
+ * سامانه روی سروری داخل ایران و بدون دسترسی به اینترنت اجرا می‌شود؛ بارگذاری
+ * فونت از سرورهای گوگل آنجا شکست می‌خورد و برگه‌های چاپی به هم می‌ریزند.
+ */
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn-ExtraBold.woff2') format('woff2');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn-Black.woff2') format('woff2');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 @layer base {
   body {
     font-family: 'Vazirmatn', Tahoma, 'B Nazanin', sans-serif;
   }
 }
 
-/* Custom print media rules */
+/* ───────────────────── اندازه و جهت کاغذ چاپ ─────────────────────
+ *
+ * ── چرا «صفحه نام‌دار» و نه @page داخل انتخاب‌گر ─────────────────────────
+ * پیش از این این قواعد به شکل زیر نوشته شده بود:
+ *
+ *   html[data-print='report'] { @page { size: A4 landscape; } }
+ *
+ * که CSS نامعتبر است: @page یک قاعده سطح‌بالا است و نمی‌شود داخل انتخاب‌گر
+ * گذاشت. مرورگر کل آن را دور می‌انداخت، پس **هیچ‌یک از این اندازه‌ها واقعاً
+ * اعمال نمی‌شد** — گزارشی که باید A4 افقی باشد عمودی چاپ می‌شد و ستون‌های
+ * سمت چپش از کاغذ بیرون می‌افتاد. خود مرحله build هم هشدار می‌داد.
+ *
+ * راه درست «صفحه نام‌دار» است: اندازه‌ها اینجا یک‌بار و در سطح بالا تعریف
+ * می‌شوند، و بعد با خصوصیت `page` روی body انتخاب می‌شود کدام‌یک فعال باشد.
+ * ────────────────────────────────────────────────────────────────────────
+ */
+/*
+ * حواله: دو نسخه، هر نسخه یک برگ A5 افقی.
+ *
+ * حاشیه صفر عمدی است: مرورگرها «Headers and footers» (تاریخ و آدرس بالا و
+ * پایین کاغذ) را فقط در حاشیه چاپ می‌کنند. با حاشیه صفر جایی برایشان نیست، پس
+ * دیگر نه فضای برگه را می‌خورند و نه امضاها را به کاغذ دوم می‌رانند. فاصله
+ * امن از لبه را خود برگه با padding می‌دهد.
+ */
+@page note-a5-page {
+  size: A5 landscape;
+  margin: 0;
+}
+@page invoice-page {
+  size: A5 portrait;
+  margin: 6mm;
+}
+@page report-page {
+  size: A4 landscape;
+  margin: 10mm 8mm;
+}
+
+/* ─────────────────────────── قواعد چاپ ───────────────────────────
+ *
+ * سه حالت چاپ وجود دارد و اندازه کاغذ با صفت data-print روی <html> عوض
+ * می‌شود، چون @page نمی‌تواند برای بخش‌های مختلف یک صفحه متفاوت باشد:
+ *
+ *   note-a6   → یک برگه حواله روی کاغذ A6
+ *   note-a4   → چهار نسخه از همان برگه، روی یک A4 با خط برش
+ *               (بیشتر چاپگرهای اداری کاغذ A6 نمی‌گیرند)
+ *   invoice   → فاکتور مالی روی کاغذ A5
+ * ───────────────────────────────────────────────────────────────── */
+
 @media print {
-  /* Hide non-printable elements */
   .no-print,
   nav,
-  header,
+  header:not(.print-keep),
   footer,
   .print-hide {
     display: none !important;
   }
 
   body {
-    background-color: #ffffff !important;
-    color: #000000 !important;
+    background: #fff !important;
+    color: #000 !important;
     margin: 0 !important;
     padding: 0 !important;
-    font-size: 13pt !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  /* Reset container widths for A4 / standard print */
-  .receipt-paper-box {
-    box-shadow: none !important;
-    border: 2px solid #000000 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    margin: 0 auto !important;
-    padding: 20mm 15mm !important;
-    background: #ffffff !important;
-    page-break-inside: avoid;
+  /*
+   * هرچه بیرون از ناحیه چاپ است پنهان می‌شود.
+   *
+   * دو قاعده پشت سر هم، عمداً:
+   *
+   *   ۱. فرزندان مستقیم body پنهان می‌شوند. ناحیه چاپ با Portal مستقیم زیر
+   *      body قرار می‌گیرد تا از این قاعده مستثنا بماند.
+   *
+   *   ۲. اگر روزی ساختار عوض شد و ناحیه چاپ جای دیگری رفت، قاعده دوم تضمین
+   *      می‌کند باز هم دیده شود. بدون این، یک تغییر ساده در چیدمان می‌تواند
+   *      دوباره باعث چاپ برگه سفید شود — خطایی که تا لحظه چاپ معلوم نمی‌شود.
+   */
+  body.printing > *:not(.print-root) {
+    display: none !important;
   }
 
-  .print-area-only {
+  body.printing .print-root,
+  body.printing .print-root * {
+    visibility: visible !important;
+  }
+
+  .print-root {
+    display: block !important;
     position: absolute;
-    left: 0;
-    top: 0;
+    inset: 0;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+  }
+}
+
+/* ── حواله: دو نسخه (انبار و باسکول)، هر کدام یک برگ A5 افقی ── */
+@media print {
+  html[data-print='note-a5'] body {
+    page: note-a5-page;
+  }
+
+  /* جریان عادی صفحه، نه absolute: عنصر absolute بین چند صفحه نمی‌شکند */
+  html[data-print='note-a5'] .print-root {
+    position: static;
+  }
+
+  html[data-print='note-a5'] .print-cell {
+    box-sizing: border-box;
+    width: 210mm;
+    /* کمی کمتر از ۱۴۸ تا گرد شدن مرورگر صفحه خالی اضافه نسازد */
+    height: 147mm;
+    padding: 7mm 8mm;
+    break-after: page;
+    page-break-after: always;
+    overflow: hidden;
+  }
+
+  html[data-print='note-a5'] .print-cell:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  html[data-print='note-a5'] .delivery-note {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+/* ── حالت ۳: فاکتور مالی روی A5 ── */
+@media print {
+  html[data-print='invoice'] body {
+    page: invoice-page;
+  }
+
+  html[data-print='invoice'] .invoice-a5 {
+    width: 100%;
+    min-height: 196mm;
+  }
+}
+
+/* ── حالت ۴: گزارش روی A4 افقی (برای ذخیره به صورت PDF) ── */
+@media print {
+  html[data-print='report'] body {
+    page: report-page;
+  }
+
+  html[data-print='report'] .report-print {
     width: 100%;
   }
+
+  /*
+   * سرستون‌ها بالای هر صفحه تکرار شوند.
+   * بدون این، در گزارش چندصفحه‌ای فقط صفحه اول سرستون دارد و بقیه صفحه‌ها
+   * ستون‌هایی بی‌نام می‌شوند که خواندنشان ممکن نیست.
+   */
+  html[data-print='report'] thead {
+    display: table-header-group;
+  }
+
+  /* یک سطر نباید وسطش بین دو صفحه بشکند */
+  html[data-print='report'] .report-row {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}
+
+/* پیش‌نمایش روی صفحه — تا کاربر پیش از چاپ، ابعاد واقعی را ببیند */
+
+/*
+ * پیش‌نمایش یک برگ A5 افقی (۲۱۰ × ۱۴۸ میلی‌متر)، کمی کوچک‌شده. هر دو نسخه
+ * زیر هم نشان داده می‌شوند.
+ */
+.preview-a5 {
+  width: 210mm;
+  height: 147mm;
+  padding: 7mm 8mm;
+  box-sizing: border-box;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  transform-origin: top center;
+}
+
+.preview-a5 .delivery-note {
+  width: 100%;
+  height: 100%;
+}
+
+.preview-invoice .invoice-a5 {
+  width: 148mm;
+  min-height: 210mm;
 }
 
 /* Underline decoration for variable placeholders in paper format */
 .variable-underline {
   border-bottom: 1.5px dotted #1e293b;
   display: inline-block;
-  padding: 0 8px;
+  padding: 0 6px;
   font-weight: 700;
   color: #0f172a;
 }
-

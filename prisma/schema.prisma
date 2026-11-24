@@ -1,0 +1,425 @@
+// دیتابیس سامانه حواله آرد — شرکت آرد طلای سفید ماهان
+//
+// موتور: SQLite (کل دیتابیس در یک فایل — بکاپ یعنی کپی همان فایل).
+// برای انتقال به PostgreSQL در آینده فقط provider و url عوض می‌شود.
+//
+// قواعد ثابت این schema:
+//   • مبالغ: ریال، همیشه BigInt — نه Int (سقف Int حدود ۲.۱ میلیارد است و
+//     سقف اعتبار یک عمده‌فروش به‌راحتی از آن رد می‌شود) و نه اعشاری
+//   • وزن‌ها: گرم یا کیلوگرم صحیح — هرگز اعشاری
+//   • تاریخ‌ها: میلادی/UTC — تبدیل به شمسی فقط در لایه نمایش
+//   • رکوردهای مالی: soft delete (فیلد deletedAt) — هرگز حذف فیزیکی
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────── کاربران و دسترسی ───────────────────────────
+
+enum Role {
+  ADMIN // مدیر سیستم
+  SALES // فروش
+  FINANCE // مالی / صندوق
+  WAREHOUSE // انبار
+  VIEWER // گزارش‌گیر (فقط خواندن)
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  passwordHash String
+  fullName     String
+  role         Role
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  issuedReceipts Receipt[]          @relation("IssuedBy")
+  auditEntries   AuditLog[]
+  payments       Payment[]
+  stockMovements StockMovement[]
+  statusChanges  ReceiptStatusLog[]
+
+  @@index([role])
+}
+
+// ─────────────────────────── محصولات و انبار ───────────────────────────
+
+enum PricingCategory {
+  SUBSIDISED // یارانه‌ای / سهمیه‌ای
+  FREE // آزاد
+}
+
+model Product {
+  id              Int             @id @default(autoincrement())
+  code            String          @unique
+  name            String
+  description     String?
+  bagWeightKg     Int // وزن هر کیسه به کیلوگرم (۴۰ یا ۵۰)
+  basePricePerKg  BigInt // ریال به ازای هر کیلوگرم — عدد صحیح
+  pricingCategory PricingCategory
+  vatPercent      Int             @default(0) // درصد مالیات این محصول
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  deletedAt       DateTime?
+
+  items          ReceiptItem[]
+  stockMovements StockMovement[]
+  stock          Stock?
+
+  @@index([pricingCategory])
+}
+
+/// موجودی جاری هر محصول. onHand همیشه با جمع StockMovementها سازگار نگه داشته می‌شود.
+model Stock {
+  id         Int      @id @default(autoincrement())
+  productId  Int      @unique
+  onHandKg   Int      @default(0) // موجودی فیزیکی انبار
+  reservedKg Int      @default(0) // رزروشده توسط حواله‌های صادرشده و هنوز بارگیری‌نشده
+  updatedAt  DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id])
+}
+
+enum StockMovementType {
+  PRODUCTION // ثبت تولید روزانه
+  RESERVE // رزرو هنگام صدور حواله
+  RELEASE_RESERVE // آزادسازی رزرو (ابطال یا انقضا)
+  ISSUE // کسر واقعی هنگام بارگیری
+  RETURN // مرجوعی
+  ADJUSTMENT // اصلاح دستی انبار
+}
+
+model StockMovement {
+  id         Int               @id @default(autoincrement())
+  productId  Int
+  type       StockMovementType
+  quantityKg Int // مثبت = افزایش موجودی، منفی = کاهش
+  receiptId  Int?
+  note       String?
+  userId     Int
+  createdAt  DateTime          @default(now())
+
+  product Product  @relation(fields: [productId], references: [id])
+  receipt Receipt? @relation(fields: [receiptId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
+
+  @@index([productId, createdAt])
+  @@index([receiptId])
+}
+
+// ─────────────────────────── مشتریان ───────────────────────────
+
+enum CustomerKind {
+  INDIVIDUAL // حقیقی
+  COMPANY // حقوقی
+}
+
+enum CustomerType {
+  BAKERY // نانوایی
+  GUILD_INDUSTRY // صنف و صنعت
+  WHOLESALER // عمده‌فروش
+}
+
+model Customer {
+  id             Int          @id @default(autoincrement())
+  code           String       @unique
+  kind           CustomerKind
+  type           CustomerType
+  name           String
+  nationalId     String? // کد ملی (حقیقی) یا شناسه ملی (حقوقی)
+  economicCode   String?
+  phone          String?
+  address        String?
+  creditLimit    BigInt       @default(0) // ریال
+  balance        BigInt       @default(0) // ریال؛ منفی = بدهکار
+  monthlyQuotaKg Int          @default(0) // سقف ماهانه آرد یارانه‌ای
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+
+  receipts Receipt[]
+  payments Payment[]
+
+  @@index([name])
+  @@index([nationalId])
+}
+
+// ─────────────────────────── حواله ───────────────────────────
+
+enum ReceiptStatus {
+  DRAFT // پیش‌نویس
+  ISSUED // صادر شده
+  FINANCE_APPROVED // پرداخت‌شده / تایید مالی
+  READY_FOR_LOADING // آماده بارگیری
+  LOADED // بارگیری‌شده
+  DISPATCHED // خارج شده (تحویل)
+  CLOSED // بسته‌شده
+  CANCELLED // ابطال
+  RETURNED // مرجوعی
+  EXPIRED // انقضای اعتبار
+}
+
+model Receipt {
+  id            Int           @id @default(autoincrement())
+  /// سریال یکتا و غیرقابل ویرایش — داخل تراکنش تولید می‌شود
+  receiptNumber String        @unique
+  status        ReceiptStatus @default(DRAFT)
+
+  customerId Int
+  issuedById Int
+
+  issueDate  DateTime @default(now())
+  validUntil DateTime
+
+  // مبالغ — همگی ریال و BigInt
+  subtotal   BigInt @default(0)
+  discount   BigInt @default(0)
+  vatAmount  BigInt @default(0)
+  grandTotal BigInt @default(0)
+  paidAmount BigInt @default(0)
+
+  totalWeightKg Int @default(0)
+
+  notes String?
+
+  /// کلید جلوگیری از ثبت تکراری (double-submit)
+  idempotencyKey String? @unique
+
+  /// حواله‌ای که این سند، اصلاحیهٔ آن است
+  correctsReceiptId Int?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  customer        Customer           @relation(fields: [customerId], references: [id])
+  issuedBy        User               @relation("IssuedBy", fields: [issuedById], references: [id])
+  correctsReceipt Receipt?           @relation("Correction", fields: [correctsReceiptId], references: [id])
+  corrections     Receipt[]          @relation("Correction")
+  items           ReceiptItem[]
+  payments        Payment[]
+  statusLogs      ReceiptStatusLog[]
+  stockMovements  StockMovement[]
+  shipment        Shipment?
+
+  @@index([status])
+  @@index([customerId])
+  @@index([issueDate])
+  smsMessages SmsMessage[]
+
+}
+
+model ReceiptItem {
+  id             Int    @id @default(autoincrement())
+  receiptId      Int
+  productId      Int
+  bagCount       Int
+  bagWeightKg    Int // کپی‌شده از محصول در لحظه صدور (سند تاریخی نباید تغییر کند)
+  weightKg       Int
+  unitPricePerKg BigInt // ریال
+  lineTotal      BigInt // ریال
+  vatPercent     Int    @default(0)
+  vatAmount      BigInt @default(0)
+
+  receipt Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([receiptId])
+}
+
+/// تاریخچه کامل تغییر وضعیت — پایه پاسخ‌گویی درباره سند رسمی
+model ReceiptStatusLog {
+  id         Int            @id @default(autoincrement())
+  receiptId  Int
+  fromStatus ReceiptStatus?
+  toStatus   ReceiptStatus
+  userId     Int
+  ipAddress  String?
+  reason     String?
+  createdAt  DateTime       @default(now())
+
+  receipt Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([receiptId, createdAt])
+}
+
+// ─────────────────────────── بارگیری و خروج ───────────────────────────
+
+/// بار با شرکت حمل‌ونقل می‌رود یا خود مشتری می‌برد.
+///
+/// بسیاری از نانوایی‌ها با وانت خودشان می‌آیند؛ در آن حالت نام شرکت حمل
+/// وجود ندارد و خالی گذاشتنش یعنی «ثبت نشده»، نه «خود حمل». این دو حالت
+/// باید از هم جدا باشند تا در گزارش‌ها هم قابل تفکیک بمانند.
+enum HaulType {
+  COMPANY
+  SELF
+}
+
+/// راننده تعریف‌شده در بخش «رانندگان». کد ملی اجباری و یکتاست.
+model Driver {
+  id          Int      @id @default(autoincrement())
+  fullName    String
+  nationalId  String   @unique
+  mobile      String?
+  /// شکل ذخیره: 42ع317ایران36 — نگاه کنید به shared/plate.ts
+  plateNumber String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  shipments Shipment[]
+
+  @@index([fullName])
+}
+
+model Shipment {
+  id        Int @id @default(autoincrement())
+  receiptId Int @unique
+
+  /// راننده انتخاب‌شده در حواله. مشخصات او در همین ردیف **کپی** می‌شود تا
+  /// ویرایش بعدی راننده، برگه‌های صادرشده را تغییر ندهد.
+  driverId Int?
+  driver   Driver? @relation(fields: [driverId], references: [id])
+
+  /// تنها فیلد اجباری مشخصات راننده
+  driverName       String
+  /// کد ملی، موبایل و پلاک اختیاری‌اند: اگر پر شوند اعتبارسنجی می‌شوند، اما
+  /// نبودشان جلوی ثبت خود راننده را نمی‌گیرد.
+  driverNationalId String?
+  driverMobile     String?
+  /// پلاک انتظامی، شکل ذخیره: 42ع317ایران36 — نگاه کنید به shared/plate.ts
+  plateNumber      String?
+
+  /// بار را شرکت حمل می‌برد یا خود مشتری/راننده
+  haulType       HaulType @default(COMPANY)
+  /// فقط وقتی haulType برابر COMPANY است پر می‌شود
+  carrierCompany String?
+
+  // باسکول — کیلوگرم صحیح
+  tareWeightKg     Int?
+  grossWeightKg    Int?
+  netWeightKg      Int?
+  /// اختلاف وزن باسکول با وزن حواله
+  varianceKg       Int?
+  varianceApproved Boolean @default(false)
+
+  loadedAt     DateTime?
+  dispatchedAt DateTime?
+  gateUserId   Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  receipt Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────── پرداخت ───────────────────────────
+
+enum PaymentMethod {
+  CASH // نقدی
+  POS // کارت‌خوان
+  BANK_TRANSFER // واریز بانکی با شماره فیش
+  CHEQUE // چک
+  CREDIT // کسر از اعتبار
+}
+
+model Payment {
+  id              Int           @id @default(autoincrement())
+  receiptId       Int?
+  customerId      Int
+  amount          BigInt // ریال
+  method          PaymentMethod
+  referenceNumber String? // شماره فیش / شماره چک / کد پیگیری
+  chequeDueDate   DateTime?
+  note            String?
+  userId          Int
+  createdAt       DateTime      @default(now())
+  deletedAt       DateTime? // soft delete — داده مالی هرگز فیزیکی حذف نمی‌شود
+
+  receipt  Receipt? @relation(fields: [receiptId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@index([customerId, createdAt])
+  @@index([receiptId])
+}
+
+// ─────────────────────────── ثبت وقایع و تنظیمات ───────────────────────────
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  entityType String // Receipt / Payment / Stock / User / ...
+  entityId   Int
+  action     String // CREATE / UPDATE / STATUS_CHANGE / CANCEL / ...
+  /// تفاوت مقادیر پیش و پس از تغییر، به‌صورت JSON
+  changes    String?
+  userId     Int
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId, createdAt])
+  @@index([userId, createdAt])
+}
+
+/// تنظیمات قابل تغییر سامانه — تا قوانین کسب‌وکار داخل کد هاردکد نشوند
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────── پیامک ───────────────────────────
+
+enum SmsStatus {
+  PENDING // در صف — هنوز فرستاده نشده یا در انتظار تلاش دوباره
+  SENT // تحویل پنل پیامک شد
+  FAILED // پس از چند تلاش، کنار گذاشته شد
+}
+
+enum SmsRecipientKind {
+  DRIVER // راننده حواله
+  MANAGER // مدیر کارخانه
+}
+
+/// صف و سابقه پیامک‌ها.
+///
+/// هر پیامک اول اینجا نوشته می‌شود و بعد فرستاده می‌شود، نه برعکس. دلیلش
+/// این است که سامانه باید بدون اینترنت هم حواله صادر کند: اگر اینترنت قطع
+/// باشد پیامک همین‌جا در صف می‌ماند و بعد فرستاده می‌شود، و صدور حواله
+/// منتظرش نمی‌ماند.
+model SmsMessage {
+  id            Int              @id @default(autoincrement())
+  receiptId     Int?
+  recipient     String // شماره موبایل، ارقام لاتین
+  recipientKind SmsRecipientKind
+  /// چه چیزی باعث این پیامک شد: RECEIPT_ISSUED یا MANUAL
+  event         String
+  text          String
+  status        SmsStatus        @default(PENDING)
+  attempts      Int              @default(0)
+  lastError     String?
+  /// شناسه‌ای که پنل پیامک برمی‌گرداند — برای پیگیری تحویل
+  providerRef   String?
+  createdById   Int?
+  createdAt     DateTime         @default(now())
+  sentAt        DateTime?
+
+  receipt Receipt? @relation(fields: [receiptId], references: [id])
+
+  @@index([status])
+  @@index([receiptId])
+}
