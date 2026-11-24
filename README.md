@@ -1,3 +1,81 @@
+# Flour Delivery Order System
+
+A full-stack web application for issuing and managing flour delivery orders
+(Persian: «حواله»): driver registration, order issuing with printable
+delivery notes, customers, payments, SMS notifications and reports.
+Built with a Persian (RTL, Jalali calendar) interface.
+
+## Key Features
+
+- Delivery order lifecycle with an explicit state machine
+- A driver with a valid Iranian national ID is required before an order can be issued
+- Issued orders are immutable: only cancellation and a corrected re-issue are allowed
+- Role-based access control (admin, sales, finance, warehouse, viewer)
+- Full audit trail: every status change logs user, time and IP
+- Printable A5 invoice and A6 delivery note
+- Customer accounts, payments, credit limits and statements
+- SMS notifications (pluggable provider) and Excel reports
+- Backup and restore scripts
+- Jalali dates, Iranian license plates, Persian digits
+
+## Tech Stack
+
+React · TypeScript · Vite · Express · Prisma · SQLite · Vitest
+
+## Getting Started
+
+Requires Node.js 22+.
+
+```bash
+npm install
+cp .env.example .env
+```
+
+Generate a secret and put it in `.env` as `JWT_SECRET`:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+```
+
+Then:
+
+```bash
+npm run db:migrate
+npm run db:seed
+```
+
+Run the API and the frontend in two terminals:
+
+```bash
+npm run dev:server
+```
+
+```bash
+npm run dev
+```
+
+Open http://localhost:3000
+
+Demo users (password `ard@1404`): `admin`, `sales`, `finance`, `warehouse`, `viewer`.
+Change these before any real use.
+
+## Tests
+
+```bash
+npm test
+```
+
+352 automated tests cover the order state machine, financial calculations,
+account balances and permissions. They run against a separate database.
+
+## Documentation
+
+See [DEPLOY.md](DEPLOY.md) for production deployment and
+[USER-GUIDE.md](USER-GUIDE.md) for the staff guide (Persian).
+
+---
+
+# راهنمای فارسی
 # سامانه صدور حواله تحویل آرد
 
 سامانه مدیریت فروش و صدور حواله برای کارخانه‌های آرد
